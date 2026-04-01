@@ -1,0 +1,354 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage{float}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    urlcolor=blue,
+    citecolor=blue
+}
+
+\newcommand{\uc}{\ensuremath{\mu\text{C}/\text{cm}^2}}
+\newcommand{\mvcm}{\ensuremath{\text{MV}/\text{cm}}}
+
+\title{Multidomain Preisach Hysteresis Results for Metal / Interlayer / AlScN / Metal Stacks}
+\author{Krishna Chemudupati}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This report documents the active multidomain Preisach hysteresis workflow in the
+present repository and summarizes the main trends that emerge from the generated
+figure set. The model computes quasistatic polarization--voltage loops for
+metal / interlayer / AlScN / metal stacks by combining a multidomain Preisach
+representation of the ferroelectric, one-dimensional electrostatics with finite
+metal screening, and a self-consistent bisection solver. The main results are
+organized around three questions: how the loop changes with interlayer
+thickness, how the choice of interlayer material affects loop retention, and
+how sensitive the loop is to electrode boundary conditions. The discussion is
+kept close to the active figures and tables so that each modeling conclusion is
+connected directly to a generated result.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+\section{Purpose of the model}
+
+The active workflow is designed to answer a specific materials question: how
+the ferroelectric hysteresis loop changes when the interlayer thickness,
+interlayer material, electrode pair, and AlScN thickness are varied. Throughout
+this report the plotted quantity is the net ferroelectric polarization of the
+AlScN layer. It is therefore the average polarization of the multidomain state
+after the stack electrostatics and the domain switching have been solved
+self-consistently. It is not the screening charge, the electric displacement,
+or a measured current.
+
+At a single applied voltage $V_a$, the model guesses an internal field acting
+on the ferroelectric, determines which domains would switch under that field,
+computes the corresponding net polarization $P_{\mathrm{FE}}$, passes that
+polarization into the electrostatic stack model, and then recomputes the field
+that the stack itself would produce. The guessed field is adjusted until the
+field used to switch the domains agrees with the field returned by the
+electrostatics. The hysteresis loop is the collection of those self-consistent
+solutions along the prescribed voltage sweep.
+
+\section{Baseline active workflow}
+
+The active interlayer-thickness figures use a fixed multidomain setup with
+15000 domains, a structural disorder distribution centered at $c/a = 1.54$ with
+standard deviation $\sigma_{c/a} = 0.04$, the constitutive maps
+\[
+P_s(c/a) = 333.33(c/a) - 400 \quad \uc
+\]
+and
+\[
+E_c(c/a) = 3.16(c/a) - 1.1 \quad \mvcm,
+\]
+random initial domain states generated from a fixed seed, a quasistatic
+bisection solver, and a polarization-space stopping tolerance of 0.5 \uc. Each
+run consists of two voltage cycles, although only the final cycle is plotted.
+The interlayer sweep used throughout the active figure set is
+\[
+0,\ 0.1,\ 0.2,\ 0.5,\ 0.8,\ 1,\ 2,\ 3 \text{ nm}.
+\]
+
+The dominant electrostatic ingredients are the top and bottom electrode
+screening lengths, the top and bottom work functions, the interlayer thickness
+and dielectric constant, the ferroelectric thickness and dielectric constant,
+and the instantaneous ferroelectric polarization. In the active code the
+screening charge is computed from
+\begin{equation}
+\sigma_s =
+\frac{
+\dfrac{P_d t_d}{k_d}
++
+\dfrac{P_{\mathrm{FE}} t_f}{k_f}
++
+\epsilon_0 V_a
+}{
+\dfrac{\lambda_t}{k_t}
++
+\dfrac{\lambda_b}{k_b}
++
+\dfrac{t_d}{k_d}
++
+\dfrac{t_f}{k_f}
++
+\dfrac{t_i}{k_i}
+},
+\label{eq:sigma-active-report}
+\end{equation}
+and the internal ferroelectric field is then written as
+\begin{equation}
+E_{\mathrm{FE}} =
+\frac{\sigma_s - P_{\mathrm{FE}}}{k_f \epsilon_0}
++
+\frac{\Delta V_{\mathrm{bi,FE}}}{t_f}.
+\label{eq:efe-active-report}
+\end{equation}
+These two relations are enough to explain the trends seen later in the figures.
+A thicker interlayer weakens the loop because it both reduces how effectively
+the applied voltage reaches the ferroelectric and increases the electrostatic
+penalty associated with polarization. A higher-$k$ interlayer weakens the loop
+less strongly because it is a better dielectric match to the ferroelectric.
+Poorer metal screening reduces the stable polarization on both sides of the
+loop, while work-function asymmetry introduces a horizontal preference through
+the built-in term.
+
+\section{Al$_2$O$_3$ interlayer sweeps}
+
+To keep the sweeps informative rather than trivially saturated, the active
+figure set uses a different voltage window for each AlScN thickness. The
+45\,nm case is run at $\pm 20$ V, the 20\,nm case at $\pm 12$ V, and the
+10\,nm case at $\pm 6.5$ V. The resulting Al$_2$O$_3$ interlayer sweeps are
+shown in Figures~\ref{fig:al2o3-45}, \ref{fig:al2o3-20}, and
+\ref{fig:al2o3-10}.
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.82\linewidth]{45nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis.png}
+\caption{Ti/Al$_2$O$_3$/AlScN/Ti IL-thickness sweep for 45\,nm AlScN at $\pm 20$ V.}
+\label{fig:al2o3-45}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.82\linewidth]{20nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_12V.png}
+\caption{Ti/Al$_2$O$_3$/AlScN/Ti IL-thickness sweep for 20\,nm AlScN at $\pm 12$ V.}
+\label{fig:al2o3-20}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.82\linewidth]{10nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_6p5V.png}
+\caption{Ti/Al$_2$O$_3$/AlScN/Ti IL-thickness sweep for 10\,nm AlScN at $\pm 6.5$ V.}
+\label{fig:al2o3-10}
+\end{figure}
+
+\clearpage
+
+Table~\ref{tab:al2o3-pmax} summarizes the positive-branch amplitudes extracted
+from these loops.
+
+\begin{table}[H]
+\centering
+\caption{Positive-branch $P_{\max}$ values for Ti/Al$_2$O$_3$/AlScN/Ti loops (\uc).}
+\label{tab:al2o3-pmax}
+\small
+\begin{tabular}{@{}lrrrrrrrr@{}}
+\toprule
+Case & 0 nm & 0.1 nm & 0.2 nm & 0.5 nm & 0.8 nm & 1 nm & 2 nm & 3 nm \\
+\midrule
+45 nm, $\pm 20$ V & 112.835 & 95.340 & 72.146 & 38.986 & 25.992 & 21.203 & 9.600 & 5.380 \\
+20 nm, $\pm 12$ V & 112.977 & 113.167 & 106.027 & 56.070 & 36.548 & 29.397 & 13.630 & 7.830 \\
+10 nm, $\pm 6.5$ V & 112.895 & 101.079 & 68.863 & 33.053 & 20.600 & 16.104 & 6.498 & 3.003 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+Several points are worth noting. At 0\,nm IL all three thickness cases are
+essentially fully polarized, with amplitudes very close to $\pm 113$ \uc. Once
+the IL is introduced, the loops shrink rapidly in all three cases. The 45\,nm
+case shows the strongest suppression at large IL for the chosen voltage window
+and falls to 5.380 \uc\ at 3\,nm IL. The 20\,nm case remains the most robust of
+the three under its chosen drive and still reaches 7.830 \uc\ at 3\,nm IL. The
+10\,nm case at $\pm 6.5$ V is more clearly voltage-limited and falls to
+3.003 \uc\ at 3\,nm IL. The important point is that a thinner ferroelectric is
+not simply ``more sensitive'' in a single universal sense. A thinner film is
+easier to drive at fixed voltage, but it is also more vulnerable to
+depolarization. The apparent thickness trend therefore depends on the voltage
+window as well as the geometry itself.
+
+\section{Replacing Al$_2$O$_3$ with HfO$_x$}
+
+The same thickness-specific voltage windows were then applied to
+Ti/HfO$_x$/AlScN/Ti. The resulting sweeps are shown in
+Figures~\ref{fig:hfox-45}, \ref{fig:hfox-20}, and \ref{fig:hfox-10}.
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.82\linewidth]{45nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_20V.png}
+\caption{Ti/HfO$_x$/AlScN/Ti IL-thickness sweep for 45\,nm AlScN at $\pm 20$ V.}
+\label{fig:hfox-45}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.82\linewidth]{20nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_12V.png}
+\caption{Ti/HfO$_x$/AlScN/Ti IL-thickness sweep for 20\,nm AlScN at $\pm 12$ V.}
+\label{fig:hfox-20}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.82\linewidth]{10nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_6p5V.png}
+\caption{Ti/HfO$_x$/AlScN/Ti IL-thickness sweep for 10\,nm AlScN at $\pm 6.5$ V.}
+\label{fig:hfox-10}
+\end{figure}
+
+\clearpage
+
+\begin{table}[H]
+\centering
+\caption{Positive-branch $P_{\max}$ values for Ti/HfO$_x$/AlScN/Ti loops (\uc).}
+\label{tab:hfox-pmax}
+\small
+\begin{tabular}{@{}lrrrrrrrr@{}}
+\toprule
+Case & 0 nm & 0.1 nm & 0.2 nm & 0.5 nm & 0.8 nm & 1 nm & 2 nm & 3 nm \\
+\midrule
+45 nm, $\pm 20$ V & 112.835 & 106.786 & 92.224 & 59.221 & 42.542 & 35.610 & 18.843 & 11.999 \\
+20 nm, $\pm 12$ V & 112.977 & 113.167 & 113.167 & 87.398 & 61.313 & 50.687 & 26.230 & 16.533 \\
+10 nm, $\pm 6.5$ V & 112.895 & 113.188 & 95.970 & 54.278 & 36.693 & 29.793 & 14.119 & 8.426 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The dominant result is that, for the same geometry and voltage window, HfO$_x$
+preserves much larger loops than Al$_2$O$_3$ at finite IL thickness. This
+follows directly from the active dielectric constants:
+$k_{\mathrm{AlScN}} = 16$, $k_{\mathrm{Al_2O_3}} = 9.3$, and
+$k_{\mathrm{HfO_x}} = 16.64$. HfO$_x$ is therefore a much better electrostatic
+match to AlScN than Al$_2$O$_3$. In the present model this means that less
+voltage is lost across the IL and the depolarization penalty is weaker. The
+effect is substantial. For the 45\,nm case at 3\,nm IL, the HfO$_x$ loop
+reaches 11.999 \uc\ while the Al$_2$O$_3$ loop reaches only 5.380 \uc. For the
+20\,nm case at the same IL thickness, HfO$_x$ gives 16.533 \uc\ while
+Al$_2$O$_3$ gives 7.830 \uc. For the 10\,nm case the corresponding values are
+8.426 \uc\ and 3.003 \uc. In other words, switching from Al$_2$O$_3$ to HfO$_x$
+roughly doubles the large-IL loop amplitude in the thicker two cases and
+improves it by almost a factor of three in the 10\,nm, lower-voltage case.
+
+\section{Electrode sensitivity at 0\,nm IL}
+
+The repository also includes a 0\,nm IL electrode study, which is useful
+because it isolates the electrode boundary condition from interlayer-material
+effects. The resulting overlay and summary heatmap are shown in
+Figures~\ref{fig:electrode-overlay} and \ref{fig:electrode-heatmap}.
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.94\linewidth]{45nm_figures/all_electrodes_0nm_overlay.png}
+\caption{Overlay of all ordered top/bottom electrode combinations at 0\,nm IL. Color denotes the top electrode, while line style and marker denote the bottom electrode.}
+\label{fig:electrode-overlay}
+\end{figure}
+
+\begin{figure}[p]
+\centering
+\includegraphics[width=0.75\linewidth]{45nm_figures/all_electrodes_0nm_deltaP_summary.png}
+\caption{Mean absolute polarization difference relative to Ti/Ti at 0\,nm IL.}
+\label{fig:electrode-heatmap}
+\end{figure}
+
+\clearpage
+
+\begin{table}[H]
+\centering
+\caption{Representative 0\,nm IL electrode effects relative to Ti/Ti.}
+\label{tab:electrode-deltas}
+\begin{tabular}{@{}lrrrr@{}}
+\toprule
+Stack & mean $|\Delta P|$ (\uc) & max $|\Delta P|$ (\uc) & $\Delta P(0\text{V},\mathrm{fwd})$ & $\Delta P(0\text{V},\mathrm{rev})$ \\
+\midrule
+Ti/Al & 0.343 & 2.933 & -0.102 & 0.041 \\
+Ti/Pd & 13.014 & 59.715 & 16.930 & -0.041 \\
+Pd/Ti & 13.193 & 59.642 & 0.298 & -17.135 \\
+Ti/Test & 67.623 & 84.359 & 66.823 & -73.976 \\
+Ti/Test2 & 67.365 & 80.180 & 70.329 & -69.851 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+This comparison separates two physically distinct effects. The first is
+work-function asymmetry. Ti/Al remains close to Ti/Ti because the work-function
+mismatch is small in the active parameter set. Ti/Pd and Pd/Ti differ much more
+strongly, and those two stacks reverse one another in the way expected from a
+built-in field that changes sign when the electrode order is reversed. The
+second effect is screening-length sensitivity. The most revealing comparison is
+Ti/Test2. Test2 was designed to keep the Ti work function while increasing the
+screening length, and the fact that Ti/Test2 still differs strongly from Ti/Ti
+shows that, in the present hysteresis-only implementation, electrode screening
+length can change the loop just as strongly as work-function asymmetry. This is
+useful because it shows that the metal boundary condition is not determined by
+work function alone; it also depends on how effectively the electrodes
+compensate ferroelectric bound charge.
+
+\section{Interpretation of the generated loop shapes}
+
+Some of the generated loops are more boxy or rhomboid than the smooth textbook
+shape often associated with ferroelectrics. In the present model this is a
+natural consequence of the assumptions rather than a plotting artifact. Each
+domain is binary rather than continuously varying, switching is threshold-based
+and abrupt, the solver is quasistatic rather than dynamical, and the internal
+field can vary almost linearly with applied voltage over part of the sweep.
+When a large collection of domains is driven through a fairly ordered set of
+thresholds under those conditions, the net polarization can follow straight
+segments and produce the boxier loop shape seen in some figures.
+
+\section{Scope and limitations}
+
+The current repository already accounts coherently for several important trends.
+It captures the strong suppression caused by increasing interlayer thickness, it
+shows why a higher-$k$ interlayer preserves the loop more effectively, it
+resolves loop skew introduced by work-function asymmetry, and it demonstrates
+that poorer electrode screening can shrink the loop even when the work function
+is held fixed. Within the present workflow these trends are emergent outputs of
+the coupled equations once the geometry, material set, and sweep protocol have
+been fixed.
+
+At the same time, this remains a compact hysteresis model rather than a full
+ferroelectric-diode transport simulator. It does not yet include DC current
+transport, thermionic emission, tunneling, trap-assisted current mechanisms,
+explicit Landau--Khalatnikov dynamics, time-dependent switching kinetics,
+spatial domain-wall physics, or finite metal thickness in the electrostatics.
+
+\section{Concluding remarks}
+
+The active multidomain Preisach workflow supports a clear set of conclusions.
+The hysteresis curves are not drawn by hand or imposed by post-processing; they
+are produced by a coupled memory-plus-electrostatics model. Interlayer
+thickness is a dominant control variable because it enters the electrostatic
+denominator directly. HfO$_x$ is considerably more favorable than Al$_2$O$_3$
+for preserving loop amplitude at finite IL thickness in the present model.
+Electrode screening length is a major hysteresis lever alongside work-function
+asymmetry. Finally, thickness trends cannot be interpreted independently of the
+chosen voltage window, because the ease of driving the ferroelectric and the
+depolarization penalty compete throughout the sweep.
+
+\end{document}

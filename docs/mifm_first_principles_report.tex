@@ -1,0 +1,401 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{hyperref}
+
+\newcommand{\uc}{\ensuremath{\mu\text{C}/\text{cm}^2}}
+\newcommand{\mvcm}{\ensuremath{\text{MV}/\text{cm}}}
+
+\title{Physics and Mathematical Formulation of the Active Multidomain Preisach Hysteresis Model}
+\author{Krishna Chemudupati}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This note records the exact physics and mathematical structure used by the
+active multidomain Preisach hysteresis model in the \texttt{src/} tree. The
+purpose is to state precisely what is being solved in the current repository,
+rather than to survey the full range of possible ferroelectric models. The
+active workflow combines a multidomain Preisach constitutive law for AlScN,
+one-dimensional stack electrostatics with finite metal screening and a
+work-function-derived built-in term, and a bisection-based quasistatic
+self-consistency solver. The equations, parameters, and numerical protocol are
+written here in the same form used by the active implementation.
+\end{abstract}
+
+\tableofcontents
+\clearpage
+
+\section{Problem statement}
+
+The active repository solves a quasistatic polarization--voltage hysteresis
+problem for stacks of the form
+\[
+\text{top metal}
+\;|\;
+\text{interlayer}
+\;|\;
+\text{AlScN}
+\;|\;
+\text{dead layer}
+\;|\;
+\text{bottom metal}.
+\]
+In the main active figures the dead layer is set to zero thickness, but the
+stack definition retains the dead-layer terms symbolically because they remain
+part of the implemented electrostatic model. The question answered by the
+active workflow is therefore narrow and concrete: for a fixed multilayer stack,
+a fixed domain population, and a prescribed voltage sweep, what self-consistent
+multidomain ferroelectric polarization is obtained at each bias point?
+
+\section{Variables and units}
+
+The macroscopic stack variables are the interlayer thickness $t_i$, the
+ferroelectric thickness $t_f$, the dead-layer thickness $t_d$, the dielectric
+constants $k_i$, $k_f$, and $k_d$, the top and bottom screening lengths
+$\lambda_t$ and $\lambda_b$, the corresponding screening dielectric factors
+$k_t$ and $k_b$, the top and bottom work functions $W_t$ and $W_b$, the
+applied voltage $V_a$, the screening charge density $\sigma_s$, the dead-layer
+polarization $P_d$, and the net ferroelectric polarization
+$P_{\mathrm{FE}}$.
+
+The ferroelectric is represented as a population of $N$ Preisach domains.
+Domain $n$ is described by a structural parameter $\eta_n = (c/a)_n$, a local
+saturation polarization $P_{s,n}$, a local coercive field $E_{c,n}$, and a
+binary state variable $s_n \in \{-1,+1\}$. The net ferroelectric polarization
+is defined as
+\begin{equation}
+P_{\mathrm{FE}} = \frac{1}{N}\sum_{n=1}^{N} s_n P_{s,n}.
+\label{eq:pfe-average-mifm}
+\end{equation}
+
+Internally, the code works in atomic units. This is handled in
+\texttt{src/atomicunits.py}, where voltage is converted from volts to atomic
+units, thickness is converted from nanometers to bohr, polarization is
+converted from \uc\ to atomic units, and electric field is converted from
+\mvcm\ to atomic units. The electrostatic constant used internally is
+\begin{equation}
+\epsilon_0^{(\mathrm{au})} = \frac{1}{4\pi}.
+\label{eq:eps0-au-mifm}
+\end{equation}
+All equations below are written in a form consistent with that implementation.
+
+\section{Multidomain Preisach constitutive law}
+
+The active model generates the ferroelectric domain population from a
+structural-disorder proxy, namely the local lattice ratio $c/a$. For each
+domain,
+\begin{equation}
+\eta_n \sim \mathcal{N}(\mu_{c/a}, \sigma_{c/a}).
+\label{eq:ca-dist-mifm}
+\end{equation}
+In the active figure workflow the default values are
+\begin{equation}
+\mu_{c/a} = 1.54,
+\qquad
+\sigma_{c/a} = 0.04.
+\label{eq:ca-active-mifm}
+\end{equation}
+
+If no override values are supplied, the local saturation polarization and the
+local coercive field are generated through the default constitutive maps
+\begin{align}
+P_{s,n} &= 333.33\,\eta_n - 400
+\qquad \text{(\uc, before unit conversion)}, \label{eq:ps-map-mifm} \\
+E_{c,n} &= 3.16\,\eta_n - 1.1
+\qquad \text{(\mvcm, before unit conversion)}. \label{eq:ec-map-mifm}
+\end{align}
+The resulting values are then converted into atomic units. The class also
+supports an override path in which user-specified means and standard deviations
+for $P_s$ and $E_c$ are imposed by constructing linear maps from the sampled
+$\eta_n$ values,
+\begin{align}
+P_{s,n} &= \left| a_P \eta_n + b_P \right|, \\
+E_{c,n} &= \left| a_E \eta_n + b_E \right|,
+\end{align}
+with
+\begin{align}
+a_P &= \frac{\sigma_{P_s}}{\sigma_{c/a}},
+&
+b_P &= \mu_{P_s} - a_P \mu_{c/a}, \\
+a_E &= \frac{\sigma_{E_c}}{\sigma_{c/a}},
+&
+b_E &= \mu_{E_c} - a_E \mu_{c/a}.
+\end{align}
+The absolute value in this override path is used only to prevent unphysical
+negative local magnitudes.
+
+The switching law itself is a symmetric rectangular hysteron. If $E$ denotes a
+candidate internal field seen by the ferroelectric, the domain update is
+\begin{equation}
+s_n(E) =
+\begin{cases}
+-1, & s_n^{\mathrm{base}} = +1 \text{ and } E \le -E_{c,n}, \\
++1, & s_n^{\mathrm{base}} = -1 \text{ and } E \ge +E_{c,n}, \\
+s_n^{\mathrm{base}}, & \text{otherwise}.
+\end{cases}
+\label{eq:switch-rule-mifm}
+\end{equation}
+The current active model therefore assumes binary local states, abrupt
+threshold-driven switching, and no continuous local $P(E)$ law or explicit
+switching kinetics.
+
+\section{Stack electrostatics}
+
+The stack is instantiated by the \texttt{FerroelectricDiode} class and carries
+the geometry and boundary-condition data required by the electrostatic solver.
+The active implementation uses the thicknesses $t_i$, $t_f$, and $t_d$, the
+dielectric constants $k_i$, $k_f$, and $k_d$, the screening constants
+$k_t$ and $k_b$, the screening lengths $\lambda_t$ and $\lambda_b$, the work
+functions $W_t$ and $W_b$, and the current polarization
+$P_{\mathrm{FE}}$. In the current code the dead-layer parameters are
+\begin{equation}
+k_d = \frac{k_f}{2},
+\qquad
+P_d = 0.
+\label{eq:dead-layer-active-mifm}
+\end{equation}
+
+The work-function difference is not inserted as a single additive voltage
+through the whole stack. Instead, the code computes a ferroelectric-specific
+built-in voltage partition,
+\begin{equation}
+\Delta V_{\mathrm{bi,FE}} =
+(W_b - W_t)\,
+\frac{t_f}{
+t_f + \dfrac{k_f}{k_i} t_i + \dfrac{k_f}{k_d} t_d }.
+\label{eq:dv-bi-fe-mifm}
+\end{equation}
+This is the exact expression used in \texttt{src/potential.py}.
+
+Given a polarization $P_{\mathrm{FE}}$ and an applied voltage $V_a$, the active
+code computes the screening charge density as
+\begin{equation}
+\sigma_s(P_{\mathrm{FE}},V_a) =
+\frac{
+\dfrac{P_d t_d}{k_d}
++
+\dfrac{P_{\mathrm{FE}} t_f}{k_f}
++
+\epsilon_0 V_a
+}{
+\dfrac{\lambda_t}{k_t}
++
+\dfrac{\lambda_b}{k_b}
++
+\dfrac{t_d}{k_d}
++
+\dfrac{t_f}{k_f}
++
+\dfrac{t_i}{k_i}
+}.
+\label{eq:sigma-code-mifm}
+\end{equation}
+The internal field inside the ferroelectric is then
+\begin{equation}
+E_{\mathrm{FE}}(P_{\mathrm{FE}},V_a) =
+\frac{\sigma_s(P_{\mathrm{FE}},V_a)-P_{\mathrm{FE}}}{k_f \epsilon_0}
++
+\frac{\Delta V_{\mathrm{bi,FE}}}{t_f}.
+\label{eq:efe-code-mifm}
+\end{equation}
+Equation~\eqref{eq:sigma-code-mifm} says that the electrodes must supply enough
+free charge to compensate the external source term, the ferroelectric bound
+charge, and any dead-layer contribution while respecting the total
+series-capacitance-like denominator of the whole stack. Equation
+\eqref{eq:efe-code-mifm} then states that the ferroelectric feels a
+screening-controlled electrostatic field together with a built-in contribution
+set by the work-function asymmetry and the dielectric partition of the stack.
+This is the reason IL thickness, IL dielectric constant, metal work function,
+and metal screening length all influence the final hysteresis loop.
+
+\section{Self-consistency condition and bisection solver}
+
+At one applied voltage $V_a$, the solver first freezes the previous domain
+population $\{s_n^{\mathrm{base}}\}_{n=1}^{N}$. For a guessed field $E$, it
+builds a candidate switched state using
+\eqref{eq:switch-rule-mifm} and then computes the corresponding candidate
+polarization,
+\begin{equation}
+P_{\mathrm{FE}}^{\mathrm{cand}}(E) =
+\frac{1}{N}\sum_{n=1}^{N} s_n(E) P_{s,n}.
+\label{eq:candidate-p-mifm}
+\end{equation}
+The active bisection solver defines the residual
+\begin{equation}
+r(E;V_a) =
+E - E_{\mathrm{FE}}\!\left(P_{\mathrm{FE}}^{\mathrm{cand}}(E), V_a\right),
+\label{eq:residual-mifm}
+\end{equation}
+and seeks a field $E^\star$ such that
+\begin{equation}
+r(E^\star;V_a) = 0.
+\label{eq:fixed-point-mifm}
+\end{equation}
+This equation is the appropriate quasistatic closure condition for the present
+model because it requires the field used to update the domains to be equal to
+the field that the stack electrostatics would actually produce for the
+polarization generated by those updated domains.
+
+The active solver first builds an initial bracket by estimating a sufficiently
+large field window from the mean magnitude of the local polarization values,
+the extreme ferroelectric fields corresponding to $P=\pm P_{\max}$, and the
+maximum coercive-field magnitude in the domain population, then adds a margin
+of 1\,\mvcm\ in atomic units. If the residual does not change sign across that
+interval, the bracket is expanded up to 24 times. This step is purely
+numerical; it is not additional physics. The bisection loop itself terminates
+when the polarization difference between the high-field and low-field
+candidates becomes sufficiently small,
+\begin{equation}
+\left|
+P_{\mathrm{FE}}^{\mathrm{high}} - P_{\mathrm{FE}}^{\mathrm{low}}
+\right|
+\le \Delta P_{\mathrm{tol}},
+\label{eq:ptol-mifm}
+\end{equation}
+and in the active figure workflow the tolerance is
+\begin{equation}
+\Delta P_{\mathrm{tol}} = 0.5 \ \uc.
+\label{eq:ptol-active-mifm}
+\end{equation}
+If the bracket cannot be made sign-changing or if the iteration limit is
+reached, the solver chooses the candidate with the smallest absolute residual.
+That fallback is a numerical protection device rather than a new physical
+assumption.
+
+\section{Sweep protocol and active parameter set}
+
+The active figure driver constructs a single-cycle voltage trace
+\begin{equation}
+-V_{\max} \rightarrow +V_{\max} \rightarrow -V_{\max}
+\label{eq:single-cycle-mifm}
+\end{equation}
+using a fixed voltage step, repeats that cycle twice,
+\begin{equation}
+\text{full sweep} = \text{cycle} \times 2,
+\label{eq:two-cycles-mifm}
+\end{equation}
+and plots only the final cycle. This reduces the dependence of the displayed
+loop on the arbitrary initial domain state. Across the IL-thickness sweep the
+same seed and the same structural-distribution parameters are reused, so the
+same $c/a$ realization and the same initial random domain-state pattern are
+preserved from one IL thickness to the next. This isolates the electrostatic
+effect of IL thickness rather than mixing geometry changes with random changes
+in the ferroelectric population.
+
+The most important baseline material parameters used by the active figure path
+are summarized in Table~\ref{tab:materials-active-mifm}.
+
+\begin{table}[H]
+\centering
+\caption{Baseline active material parameters used by the current figure workflow.}
+\label{tab:materials-active-mifm}
+\begin{tabular}{@{}lllll@{}}
+\toprule
+Material & Work function (eV) & Screening length (bohr) & $k$ & Notes \\
+\midrule
+Ti & 4.33 & 0.1 & 1 & baseline metal \\
+Al & 4.28 & 0.1 & 1 & baseline metal \\
+Pd & 5.30 & 0.1 & 1 & baseline metal \\
+Test & 4.08 & 1.0 & 1 & lower WF, longer screening \\
+Test2 & 4.33 & 1.0 & 1 & same WF as Ti, longer screening \\
+Al$_2$O$_3$ & --- & --- & 9.3 & baseline AlO$_x$ proxy \\
+HfO$_x$ & --- & --- & 16.64 & high-$k$ interlayer \\
+AlScN & --- & --- & 16 & baseline FE dielectric constant \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+The main thickness-specific voltage windows in the active figure set are
+45\,nm AlScN at $\pm 20$ V, 20\,nm AlScN at $\pm 12$ V, and 10\,nm AlScN at
+$\pm 6.5$ V.
+
+\section{Qualitative consequences of the equations}
+
+Equations~\eqref{eq:sigma-code-mifm} and \eqref{eq:efe-code-mifm} already
+predict the dominant trends in the figure set. Increasing the interlayer
+thickness raises the electrostatic denominator, reduces the charge-compensation
+efficiency of the electrodes, weakens the transmission of external voltage to
+the ferroelectric, and strengthens the depolarization penalty; as a result, the
+loop generally shrinks within a fixed voltage window. Increasing the
+interlayer dielectric constant has the opposite effect in the sense that a
+larger $k_i$ reduces the electrostatic penalty associated with the interlayer.
+This is why the active model predicts larger loops for HfO$_x$ than for
+Al$_2$O$_3$ at the same thickness.
+
+The work-function difference enters through
+\eqref{eq:dv-bi-fe-mifm}, so changing the top--bottom order changes the sign of
+the built-in term. Reversing a strongly asymmetric stack should therefore
+approximately reverse the horizontal preference of the loop. The screening
+lengths enter the denominator of \eqref{eq:sigma-code-mifm} directly. Poorer
+screening reduces the screening charge available to compensate bound charge,
+strengthens the depolarization field, and can shrink both positive and negative
+branches even when the work function is unchanged.
+
+\section{Representative active results}
+
+The generated figure set is consistent with these expectations.
+Figures~\ref{fig:20nm-al2o3-mifm} and \ref{fig:20nm-hfox-mifm} show a
+representative comparison for the 20\,nm AlScN case at $\pm 12$ V.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{20nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_12V.png}
+\caption{Representative Al$_2$O$_3$ interlayer sweep: 20\,nm AlScN at $\pm 12$ V.}
+\label{fig:20nm-al2o3-mifm}
+\end{figure}
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.78\linewidth]{20nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_12V.png}
+\caption{Representative HfO$_x$ interlayer sweep: 20\,nm AlScN at $\pm 12$ V.}
+\label{fig:20nm-hfox-mifm}
+\end{figure}
+
+For the 20\,nm case at 3\,nm IL, the Al$_2$O$_3$ stack gives
+$P_{\max} = 7.830$ \uc, whereas the HfO$_x$ stack gives
+$P_{\max} = 16.533$ \uc. This is the expected electrostatic trend associated
+with the larger dielectric constant of HfO$_x$.
+
+\begin{figure}[H]
+\centering
+\includegraphics[width=0.88\linewidth]{45nm_figures/all_electrodes_0nm_overlay.png}
+\caption{Electrode sensitivity at 0\,nm IL.}
+\label{fig:electrode-overlay-active-mifm}
+\end{figure}
+
+The electrode comparison provides a second useful check. Ti/Test2 differs
+strongly from Ti/Ti even though Test2 preserves the Ti work function. This is a
+direct signature of screening-length sensitivity in the active electrostatic
+model, and it confirms that the metal boundary condition is controlled by
+screening as well as work-function asymmetry.
+
+\section{Scope of the active model}
+
+The present model is multidomain, history-dependent, electrostatically
+self-consistent, quasistatic, and physically interpretable. It is not a
+transport model, a time-domain switching-kinetics model, a continuous Landau or
+phase-field model, or a microscopic \textit{ab initio} domain simulation. Those
+statements are not incidental; they define the domain of validity of the active
+workflow. The repository is solving a compact, interpretable hysteresis problem
+rather than a full diode transport problem.
+
+\section{Closing statement}
+
+The active repository solves the following problem: for a fixed multilayer
+stack and a fixed Preisach domain population, find the field-dependent domain
+configuration whose net polarization is self-consistent with the
+one-dimensional stack electrostatics at each point of a quasistatic voltage
+sweep. That statement captures the exact physical and mathematical content of
+the current multidomain Preisach hysteresis workflow.
+
+\end{document}

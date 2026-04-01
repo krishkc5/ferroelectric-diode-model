@@ -1,0 +1,8 @@
+\contentsline {section}{\numberline {1}Purpose of the model}{2}{section.1}%
+\contentsline {section}{\numberline {2}Baseline active workflow}{2}{section.2}%
+\contentsline {section}{\numberline {3}Al$_2$O$_3$ interlayer sweeps}{3}{section.3}%
+\contentsline {section}{\numberline {4}Replacing Al$_2$O$_3$ with HfO$_x$}{6}{section.4}%
+\contentsline {section}{\numberline {5}Electrode sensitivity at 0\,nm IL}{9}{section.5}%
+\contentsline {section}{\numberline {6}Interpretation of the generated loop shapes}{12}{section.6}%
+\contentsline {section}{\numberline {7}Scope and limitations}{12}{section.7}%
+\contentsline {section}{\numberline {8}Concluding remarks}{13}{section.8}%

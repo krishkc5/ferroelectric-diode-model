@@ -1,0 +1,10 @@
+\contentsline {section}{\numberline {1}Problem statement}{2}{section.1}%
+\contentsline {section}{\numberline {2}Variables and units}{2}{section.2}%
+\contentsline {section}{\numberline {3}Multidomain Preisach constitutive law}{2}{section.3}%
+\contentsline {section}{\numberline {4}Stack electrostatics}{3}{section.4}%
+\contentsline {section}{\numberline {5}Self-consistency condition and bisection solver}{4}{section.5}%
+\contentsline {section}{\numberline {6}Sweep protocol and active parameter set}{5}{section.6}%
+\contentsline {section}{\numberline {7}Qualitative consequences of the equations}{5}{section.7}%
+\contentsline {section}{\numberline {8}Representative active results}{6}{section.8}%
+\contentsline {section}{\numberline {9}Scope of the active model}{7}{section.9}%
+\contentsline {section}{\numberline {10}Closing statement}{7}{section.10}%
