@@ -28,25 +28,25 @@ and refocused around the current bisection-based multidomain hysteresis path.
 
 ## What Is Active
 
-The active source code now lives under [`src`](/Users/krishnachemudupati/Projects/ferrodiode-model/src):
+The active source code now lives under [`src`](src):
 
-- [`src/atomicunits.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/atomicunits.py)
-- [`src/material_types.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/material_types.py)
-- [`src/materials.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/materials.py)
-- [`src/fed.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/fed.py)
-- [`src/potential.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/potential.py)
-- [`src/preisach.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/preisach.py)
-- [`src/self_consistent_solver.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/self_consistent_solver.py)
-- [`src/plot_il_hysteresis.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/plot_il_hysteresis.py)
-- [`src/plot_electrode_comparison.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/plot_electrode_comparison.py)
+- [`src/atomicunits.py`](src/atomicunits.py)
+- [`src/material_types.py`](src/material_types.py)
+- [`src/materials.py`](src/materials.py)
+- [`src/fed.py`](src/fed.py)
+- [`src/potential.py`](src/potential.py)
+- [`src/preisach.py`](src/preisach.py)
+- [`src/self_consistent_solver.py`](src/self_consistent_solver.py)
+- [`src/plot_il_hysteresis.py`](src/plot_il_hysteresis.py)
+- [`src/plot_electrode_comparison.py`](src/plot_electrode_comparison.py)
 
 The active documentation is:
 
-- [`docs/ACTIVE_TREE_WALKTHROUGH.md`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/ACTIVE_TREE_WALKTHROUGH.md)
-- [`docs/multidomain_preisach_hysteresis_report.tex`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/multidomain_preisach_hysteresis_report.tex)
-- [`docs/multidomain_preisach_hysteresis_report.pdf`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/multidomain_preisach_hysteresis_report.pdf)
-- [`docs/mifm_first_principles_report.tex`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/mifm_first_principles_report.tex)
-- [`docs/mifm_first_principles_report.pdf`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/mifm_first_principles_report.pdf)
+- [`docs/ACTIVE_TREE_WALKTHROUGH.md`](docs/ACTIVE_TREE_WALKTHROUGH.md)
+- [`docs/multidomain_preisach_hysteresis_report.tex`](docs/multidomain_preisach_hysteresis_report.tex)
+- [`docs/multidomain_preisach_hysteresis_report.pdf`](docs/multidomain_preisach_hysteresis_report.pdf)
+- [`docs/mifm_first_principles_report.tex`](docs/mifm_first_principles_report.tex)
+- [`docs/mifm_first_principles_report.pdf`](docs/mifm_first_principles_report.pdf)
 
 ## Model Summary
 
@@ -130,7 +130,7 @@ $$
 ## Active Material Set
 
 The active figure workflow uses the baseline materials defined in
-[`src/materials.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/materials.py).
+[`src/materials.py`](src/materials.py).
 
 Important baseline values include:
 
@@ -152,22 +152,22 @@ effects.
 
 The main generated figure folders are:
 
-- [`45nm_figures`](/Users/krishnachemudupati/Projects/ferrodiode-model/45nm_figures)
-- [`20nm_figures`](/Users/krishnachemudupati/Projects/ferrodiode-model/20nm_figures)
-- [`10nm_figures`](/Users/krishnachemudupati/Projects/ferrodiode-model/10nm_figures)
+- [`45nm_figures`](45nm_figures)
+- [`20nm_figures`](20nm_figures)
+- [`10nm_figures`](10nm_figures)
 
 These correspond to AlScN thickness.
 
 Representative active figures include:
 
-- [`45nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/45nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis.png)
-- [`20nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_12V.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/20nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_12V.png)
-- [`10nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_6p5V.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/10nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_6p5V.png)
-- [`45nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_20V.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/45nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_20V.png)
-- [`20nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_12V.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/20nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_12V.png)
-- [`10nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_6p5V.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/10nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_6p5V.png)
-- [`45nm_figures/all_electrodes_0nm_overlay.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/45nm_figures/all_electrodes_0nm_overlay.png)
-- [`45nm_figures/all_electrodes_0nm_deltaP_summary.png`](/Users/krishnachemudupati/Projects/ferrodiode-model/45nm_figures/all_electrodes_0nm_deltaP_summary.png)
+- [`45nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis.png`](45nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis.png)
+- [`20nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_12V.png`](20nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_12V.png)
+- [`10nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_6p5V.png`](10nm_figures/Ti_Al2O3_AlScN_Ti_il_hysteresis_6p5V.png)
+- [`45nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_20V.png`](45nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_20V.png)
+- [`20nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_12V.png`](20nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_12V.png)
+- [`10nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_6p5V.png`](10nm_figures/Ti_HfOx_AlScN_Ti_il_hysteresis_6p5V.png)
+- [`45nm_figures/all_electrodes_0nm_overlay.png`](45nm_figures/all_electrodes_0nm_overlay.png)
+- [`45nm_figures/all_electrodes_0nm_deltaP_summary.png`](45nm_figures/all_electrodes_0nm_deltaP_summary.png)
 
 ## Main Active Findings
 
@@ -184,7 +184,7 @@ The active figure set supports the following conclusions:
 ## Running the Main Hysteresis Driver
 
 The main hysteresis script is
-[`src/plot_il_hysteresis.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/plot_il_hysteresis.py).
+[`src/plot_il_hysteresis.py`](src/plot_il_hysteresis.py).
 
 Example:
 
@@ -202,7 +202,7 @@ uv run --with matplotlib --with scipy python src/plot_il_hysteresis.py \
 ```
 
 The electrode comparison script is
-[`src/plot_electrode_comparison.py`](/Users/krishnachemudupati/Projects/ferrodiode-model/src/plot_electrode_comparison.py).
+[`src/plot_electrode_comparison.py`](src/plot_electrode_comparison.py).
 
 Example:
 
@@ -217,17 +217,17 @@ uv run --with matplotlib --with scipy python src/plot_electrode_comparison.py \
 
 ## Other Important Folders
 
-- [`old`](/Users/krishnachemudupati/Projects/ferrodiode-model/old): archived earlier code and figures
-- [`single_domain`](/Users/krishnachemudupati/Projects/ferrodiode-model/single_domain): separate sandbox for the simpler single-domain study
-- [`.tinytex`](/Users/krishnachemudupati/Projects/ferrodiode-model/.tinytex): repo-local LaTeX toolchain used to compile the reports
+- [`old`](old): archived earlier code and figures
+- [`single_domain`](single_domain): separate sandbox for the simpler single-domain study
+- [`.tinytex`](.tinytex): repo-local LaTeX toolchain used to compile the reports
 
 ## Best Reading Order
 
 If you are new to the project, the cleanest reading order is:
 
-1. [`README.md`](/Users/krishnachemudupati/Projects/ferrodiode-model/README.md)
-2. [`docs/ACTIVE_TREE_WALKTHROUGH.md`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/ACTIVE_TREE_WALKTHROUGH.md)
-3. [`docs/multidomain_preisach_hysteresis_report.pdf`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/multidomain_preisach_hysteresis_report.pdf)
-4. [`docs/mifm_first_principles_report.pdf`](/Users/krishnachemudupati/Projects/ferrodiode-model/docs/mifm_first_principles_report.pdf)
+1. [`README.md`](README.md)
+2. [`docs/ACTIVE_TREE_WALKTHROUGH.md`](docs/ACTIVE_TREE_WALKTHROUGH.md)
+3. [`docs/multidomain_preisach_hysteresis_report.pdf`](docs/multidomain_preisach_hysteresis_report.pdf)
+4. [`docs/mifm_first_principles_report.pdf`](docs/mifm_first_principles_report.pdf)
 
 That path goes from orientation, to code understanding, to results, to formal physics.
