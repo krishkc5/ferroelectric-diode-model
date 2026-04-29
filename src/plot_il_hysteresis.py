@@ -318,6 +318,7 @@ def main() -> None:
     ax.tick_params(axis="both", which="major", labelsize=11)
     for spine in ax.spines.values():
         spine.set_linewidth(1.2)
+
     fig.tight_layout(rect=(0, 0, 0.69 if args.show_assumptions else 0.84, 1))
     fig.savefig(args.output, dpi=args.dpi)
     plt.close(fig)

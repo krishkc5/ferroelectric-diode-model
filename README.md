@@ -1,7 +1,8 @@
 # Ferroelectric Diode Preisach Model
 
 This repository contains the active multidomain Preisach hysteresis workflow for
-metal / interlayer / AlScN / metal stacks.
+metal / interlayer / AlScN / metal stacks, together with a separate first-pass
+quasistatic transport workflow built on top of that hysteresis model.
 
 The current active model is:
 
@@ -11,9 +12,10 @@ The current active model is:
 - quasistatic
 - solved with a bisection-based fixed-point solver
 
-The main output of the active workflow is a family of ferroelectric
-polarization--voltage hysteresis loops across interlayer thickness, interlayer
-material, electrode choice, and AlScN thickness.
+The main hysteresis output of the active workflow is a family of ferroelectric
+polarization--voltage loops across interlayer thickness, interlayer material,
+electrode choice, and AlScN thickness. The transport output is a synthetic
+room-temperature DC I--V sweep with per-mechanism current breakdown.
 
 ## Provenance
 
@@ -30,6 +32,7 @@ and refocused around the current bisection-based multidomain hysteresis path.
 
 The active source code now lives under [`src`](src):
 
+- Legacy hysteresis path:
 - [`src/atomicunits.py`](src/atomicunits.py)
 - [`src/material_types.py`](src/material_types.py)
 - [`src/materials.py`](src/materials.py)
@@ -39,6 +42,16 @@ The active source code now lives under [`src`](src):
 - [`src/self_consistent_solver.py`](src/self_consistent_solver.py)
 - [`src/plot_il_hysteresis.py`](src/plot_il_hysteresis.py)
 - [`src/plot_electrode_comparison.py`](src/plot_electrode_comparison.py)
+
+- Separate transport path:
+- [`src/simulation_types.py`](src/simulation_types.py)
+- [`src/sweeps.py`](src/sweeps.py)
+- [`src/hysteresis_core.py`](src/hysteresis_core.py)
+- [`src/transport_fed.py`](src/transport_fed.py)
+- [`src/transport_potential.py`](src/transport_potential.py)
+- [`src/transport_solver.py`](src/transport_solver.py)
+- [`src/transport.py`](src/transport.py)
+- [`src/plot_dciv_sweep.py`](src/plot_dciv_sweep.py)
 
 The active documentation is:
 
@@ -50,12 +63,19 @@ The active documentation is:
 
 ## Model Summary
 
-The active model couples three pieces of physics:
+The repository now contains two closely related paths. The original hysteresis
+path couples three pieces of physics:
 
 1. A multidomain Preisach ferroelectric constitutive law.
 2. One-dimensional electrostatics for the stack.
 3. A self-consistent bisection solver that enforces agreement between domain
    switching and internal field.
+
+The transport path keeps that constitutive law unchanged and adds a fourth
+piece:
+
+4. A first-pass quasistatic transport layer that evaluates multiple current
+   mechanisms on top of the solved hysteresis state.
 
 At one voltage point, the model does the following:
 
@@ -67,7 +87,9 @@ At one voltage point, the model does the following:
 6. Adjust the field guess until the guessed field and the electrostatic field match.
 
 The plotted quantity in the main hysteresis figures is the net ferroelectric
-polarization of the AlScN layer.
+polarization of the AlScN layer. The transport workflow reuses the same kind of
+Preisach hysteresis state, but it does so from separate transport-specific
+modules so the original hysteresis files remain untouched.
 
 ## Key Equations
 
@@ -169,6 +191,10 @@ Representative active figures include:
 - [`45nm_figures/all_electrodes_0nm_overlay.png`](45nm_figures/all_electrodes_0nm_overlay.png)
 - [`45nm_figures/all_electrodes_0nm_deltaP_summary.png`](45nm_figures/all_electrodes_0nm_deltaP_summary.png)
 
+The transport driver also writes into these same thickness-based figure
+directories. For example, the default 20 nm synthetic DC I--V run saves into
+`20nm_figures/`.
+
 ## Main Active Findings
 
 The active figure set supports the following conclusions:
@@ -213,6 +239,24 @@ PYTHONDONTWRITEBYTECODE=1 \
 uv run --with matplotlib --with scipy python src/plot_electrode_comparison.py \
   --il-nm 0.0 \
   --output-dir 45nm_figures
+```
+
+The quasistatic DC I--V script is [`src/plot_dciv_sweep.py`](src/plot_dciv_sweep.py).
+
+Example:
+
+```bash
+MPLCONFIGDIR=.cache/matplotlib \
+UV_CACHE_DIR=.cache/uv \
+PYTHONDONTWRITEBYTECODE=1 \
+uv run --with matplotlib --with scipy python src/plot_dciv_sweep.py \
+  --fe-thickness-nm 20 \
+  --il-nm 1 \
+  --top-electrode ti \
+  --bottom-electrode ti \
+  --insulator al2o3 \
+  --waypoints 0 -12 0 12 0 \
+  --report-summary
 ```
 
 ## Other Important Folders

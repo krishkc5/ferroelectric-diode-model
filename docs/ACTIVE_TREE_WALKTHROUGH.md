@@ -12,7 +12,10 @@ It is intentionally focused on the files that define, run, explain, and summariz
 
 The goal is to make the active repository understandable to someone who is new both to the code and to ferroelectric hysteresis modeling.
 
-The active Python code now lives under `src/`.
+The active Python code now lives under `src/`. The original multidomain
+Preisach hysteresis workflow remains in its legacy files, while the newer DC
+transport work lives in separate transport-specific modules so the older loop
+generation path stays intact.
 
 ## The Repository at a Glance
 
@@ -396,6 +399,27 @@ This script helped establish several important conclusions:
 ### How to think about it
 
 If `src/plot_il_hysteresis.py` is the main experiment script, `src/plot_electrode_comparison.py` is the diagnostic script for boundary-condition sensitivity.
+
+## Transport-Specific Files
+
+The transport milestone is intentionally isolated from the older hysteresis
+files. The state dataclasses live in `src/simulation_types.py`, the ordered
+sweep helpers live in `src/sweeps.py`, and the transport-side hysteresis
+wrapper lives in `src/hysteresis_core.py`. The files
+`src/transport_fed.py`, `src/transport_potential.py`, and
+`src/transport_solver.py` are transport-aware counterparts to the older stack,
+electrostatic, and self-consistent solver files. They add the barrier,
+effective-mass, field-partition, and bias-point snapshot machinery that the
+original hysteresis path does not need.
+
+The actual transport equations live in `src/transport.py`. That file evaluates
+thermionic emission, tunneling, Poole-Frenkel conduction, trap-assisted
+tunneling, and SCLC at every bias point and sums them into a total current
+without using bias-window weights. The main entry point for this transport path
+is `src/plot_dciv_sweep.py`, which builds an ordered sweep such as
+`0 -> -X -> 0 -> +X -> 0`, advances the multidomain Preisach state across that
+trace, evaluates each current mechanism, and saves a figure containing both the
+ferroelectric state evolution and the current breakdown.
 
 ## `docs/multidomain_preisach_hysteresis_report.tex`
 

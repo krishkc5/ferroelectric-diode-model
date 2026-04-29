@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <defs>
+    <style>
+      .bg { fill: #ffffff; }
+      .box { fill: #f8fbff; stroke: #001f5b; stroke-width: 5; rx: 10; }
+      .text { font-family: Arial, Helvetica, sans-serif; font-size: 34px; font-weight: 700; fill: #001f5b; text-anchor: middle; dominant-baseline: middle; }
+      .subtext { font-family: Arial, Helvetica, sans-serif; font-size: 24px; fill: #263b5e; text-anchor: middle; dominant-baseline: middle; }
+      .arrow { stroke: #001f5b; stroke-width: 6; fill: none; marker-end: url(#arrowhead); }
+    </style>
+    <marker id="arrowhead" markerWidth="14" markerHeight="10" refX="12" refY="5" orient="auto">
+      <path d="M 0 0 L 14 5 L 0 10 z" fill="#001f5b"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1920" height="1080"/>
+
+  <rect class="box" x="90" y="410" width="285" height="190"/>
+  <text class="text" x="232.5" y="475">Stack</text>
+  <text class="subtext" x="232.5" y="525">materials + geometry</text>
+
+  <line class="arrow" x1="375" y1="505" x2="485" y2="505"/>
+
+  <rect class="box" x="500" y="410" width="285" height="190"/>
+  <text class="text" x="642.5" y="475">Preisach</text>
+  <text class="subtext" x="642.5" y="525">domain population</text>
+
+  <line class="arrow" x1="785" y1="505" x2="895" y2="505"/>
+
+  <rect class="box" x="910" y="410" width="285" height="190"/>
+  <text class="text" x="1052.5" y="465">Self-Consistent</text>
+  <text class="text" x="1052.5" y="505">Solver</text>
+  <text class="subtext" x="1052.5" y="550">field + polarization</text>
+
+  <line class="arrow" x1="1195" y1="505" x2="1305" y2="505"/>
+
+  <rect class="box" x="1320" y="410" width="235" height="190"/>
+  <text class="text" x="1437.5" y="475">P-V</text>
+  <text class="subtext" x="1437.5" y="525">hysteresis</text>
+
+  <line class="arrow" x1="1555" y1="505" x2="1665" y2="505"/>
+
+  <rect class="box" x="1680" y="410" width="190" height="190"/>
+  <text class="text" x="1775" y="475">J-V</text>
+  <text class="subtext" x="1775" y="525">transport fit</text>
+</svg>
