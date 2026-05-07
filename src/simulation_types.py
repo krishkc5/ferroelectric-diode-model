@@ -30,6 +30,12 @@ class BiasPointState:
     residual_mv_cm: float
     converged: bool
     used_fallback: bool
+    # Polarization-bound surface charge densities (atomic units, charge/area).
+    # Per polarization_barrier_coupling.md Eq. 1, Eq. 2:
+    #   sigma_pol_top_au = -P_FE  (top FE face / FE-IL interface)
+    #   sigma_pol_bot_au = +P_FE  (bottom FE face / FE-bottom-electrode interface)
+    sigma_pol_top_au: float = 0.0
+    sigma_pol_bot_au: float = 0.0
 
 
 @dataclass(frozen=True)

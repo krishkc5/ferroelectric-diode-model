@@ -180,6 +180,8 @@ def model_currents_from_states(
     pf_il_log10_scale,
     pf_trap_depth_ev,
     background_log10_conductance,
+    te_barrier_sigma_top_ev=0.0,
+    te_barrier_sigma_bot_ev=0.0,
 ):
     evaluator = TransportEvaluator(
         diode=diode,
@@ -198,11 +200,21 @@ def model_currents_from_states(
             poole_frenkel_trap_depth_ev=pf_trap_depth_ev,
             background_conductance_a_per_m2_v=10 ** background_log10_conductance,
             poole_frenkel_field_region=pf_region,
+            te_barrier_sigma_top_ev=te_barrier_sigma_top_ev,
+            te_barrier_sigma_bot_ev=te_barrier_sigma_bot_ev,
         ),
         enable_thermionic=True,
-        enable_tunneling=False,
+        enable_tunneling=False,   # Wave-3 finding: enabling this with the polarization-
+                                  # tilted WKB barrier (Eq. 9) makes the fit too sensitive
+                                  # at moderate V, causing the optimizer to push barriers
+                                  # to their upper bounds and fail to converge.
+                                  # Re-enable only after adding tighter mass/density bounds.
         enable_poole_frenkel=True,
-        enable_trap_assisted_tunneling=False,
+        enable_trap_assisted_tunneling=False,  # Same Wave-3 finding as enable_tunneling.
+                                               # TAT through HfOx oxygen vacancies is real
+                                               # physics (Vandelli/Larcher/Bersuker) but
+                                               # needs trap-density/cross-section
+                                               # constraints before it can join the fit.
         enable_sclc=False,
     )
     return [evaluator.evaluate(state) for state in states]
@@ -314,6 +326,8 @@ def main():
         pf_il_log10_scale = float(params[8])
         pf_trap_depth_ev = float(params[9])
         background_log10_conductance = float(params[10])
+        te_sigma_top_ev = float(params[11])
+        te_sigma_bot_ev = float(params[12])
         all_residuals = []
         for sweep, states in zip(experimental_sweeps, states_by_sweep):
             breakdowns = model_currents_from_states(
@@ -333,6 +347,8 @@ def main():
                 pf_il_log10_scale=pf_il_log10_scale,
                 pf_trap_depth_ev=pf_trap_depth_ev,
                 background_log10_conductance=background_log10_conductance,
+                te_barrier_sigma_top_ev=te_sigma_top_ev,
+                te_barrier_sigma_bot_ev=te_sigma_bot_ev,
             )
             model_current_a = area_m2 * np.asarray([item.total_a_per_m2 for item in breakdowns], dtype=float)
             if args.fit_signed_current:
@@ -346,10 +362,15 @@ def main():
 
     fit = least_squares(
         residuals,
-        x0=np.array([1.5, 2.5, 0.0, 1.0, 1.0, 0.5, 0.5, 9.0, 9.0, 0.8, 1.0], dtype=float),
+        # Param 11/12 are te_barrier_sigma_{top,bot}_ev (Tung 1992). Bounded [0.05, 0.30] eV
+        # per Werner-Guettler / Tung literature; initial 0.20 eV (mid-range) to give the
+        # Gaussian-broadening DOF a chance to compete with the BG-conductance fudge channel.
+        # Lower bound 0.05 eV: forces TE inhomogeneity to be at least nominal — typical metal/
+        # oxide interfaces always have some.
+        x0=np.array([1.5, 2.5, 0.0, 1.0, 1.0, 0.5, 0.5, 9.0, 9.0, 0.8, 1.0, 0.20, 0.20], dtype=float),
         bounds=(
-            [0.0, 0.0, 0.0, 0.1, 0.1, -12.0, -12.0, -8.0, -8.0, 0.05, -12.0],
-            [4.5, 4.5, 2.0, 10.0, 10.0, 24.0, 24.0, 20.0, 20.0, 2.0, 12.0],
+            [0.0, 0.0, 0.0, 0.1, 0.1, -12.0, -12.0, -8.0, -8.0, 0.05, -12.0, 0.05, 0.05],
+            [4.5, 4.5, 2.0, 10.0, 10.0, 24.0, 24.0, 20.0, 20.0, 2.0, 12.0, 0.30, 0.30],
         ),
         max_nfev=args.max_nfev,
     )
@@ -365,6 +386,8 @@ def main():
     fitted_pf_il_log10_scale = float(fit.x[8])
     fitted_pf_trap_depth_ev = float(fit.x[9])
     fitted_background_log10_conductance = float(fit.x[10])
+    fitted_te_sigma_top_ev = float(fit.x[11])
+    fitted_te_sigma_bot_ev = float(fit.x[12])
     fitted_results = []
     for sweep, states in zip(experimental_sweeps, states_by_sweep):
         breakdowns = model_currents_from_states(
@@ -384,6 +407,8 @@ def main():
             pf_il_log10_scale=fitted_pf_il_log10_scale,
             pf_trap_depth_ev=fitted_pf_trap_depth_ev,
             background_log10_conductance=fitted_background_log10_conductance,
+            te_barrier_sigma_top_ev=fitted_te_sigma_top_ev,
+            te_barrier_sigma_bot_ev=fitted_te_sigma_bot_ev,
         )
         fitted_results.append(
             {
@@ -473,6 +498,8 @@ def main():
             f"log10 PF IL scale = {fitted_pf_il_log10_scale:.3f}",
             f"PF trap depth = {fitted_pf_trap_depth_ev:.3f} eV",
             f"log10 bg cond = {fitted_background_log10_conductance:.3f}",
+            f"TE sigma_phi top = {fitted_te_sigma_top_ev:.3f} eV  (Tung 1992)",
+            f"TE sigma_phi bot = {fitted_te_sigma_bot_ev:.3f} eV  (Tung 1992)",
             f"PF region = {args.pf_region}",
             f"mode = {'signed I' if args.fit_signed_current else '|I|'}",
             f"precondition cycles = {args.precondition_bipolar_cycles}",
@@ -536,7 +563,9 @@ def main():
         f"log10_pf_fe_scale={fitted_pf_fe_log10_scale:.6f} "
         f"log10_pf_il_scale={fitted_pf_il_log10_scale:.6f} "
         f"pf_trap_depth_ev={fitted_pf_trap_depth_ev:.6f} "
-        f"log10_bg_cond={fitted_background_log10_conductance:.6f} cost={fit.cost:.6e}"
+        f"log10_bg_cond={fitted_background_log10_conductance:.6f} "
+        f"te_sigma_top_ev={fitted_te_sigma_top_ev:.6f} "
+        f"te_sigma_bot_ev={fitted_te_sigma_bot_ev:.6f} cost={fit.cost:.6e}"
     )
     print(f"[fit-output] figure={output_path} csv={csv_path}")
 

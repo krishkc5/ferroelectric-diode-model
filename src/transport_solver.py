@@ -117,6 +117,12 @@ class SelfConsistentSolver:
             residual_mv_cm=AtomicUnits.atomic_units_to_Mv_per_cm(final_eval["residual"]),
             converged=converged,
             used_fallback=used_fallback,
+            # Per polarization_barrier_coupling.md Eq. 1, Eq. 2: sigma_pol,top = -P,
+            # sigma_pol,bot = +P. These are bound charge densities at the FE faces;
+            # they enter Tsymbal-Kohlstedt screening (Eq. 5/6) and the WKB barrier
+            # tilt (Eq. 8/9).
+            sigma_pol_top_au=self.potential.sigma_pol_top(polarization_au),
+            sigma_pol_bot_au=self.potential.sigma_pol_bot(polarization_au),
         )
 
     def solve_with_state(self, voltage):
