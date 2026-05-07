@@ -80,16 +80,33 @@ class Potential:
             + AtomicUnits.epsilon_0 * effective_v_diff
         ) / denominator
 
+        # Split the FE voltage drop into:
+        #   (i) applied-field-only tilt: sigma_s / (eps_FE eps0) * t_FE
+        #       This is Eq. 14 in the P -> 0 limit, with sigma_s reducing
+        #       to the polarization-free divider charge.
+        #   (ii) polarization-only tilt (Eq. 8 of polarization_barrier_coupling.md):
+        #       Delta_U_pol(x) = -(sigma_pol_bot / eps_FE) q x = -P/(eps_FE eps0) q x
+        # In the *electron PE* convention used by total_potential, the FE-region
+        # electrostatic contribution is the applied-field part; ΔU_pol(x) is
+        # carried by `polarization_tilt_potential` (added in `total_potential`).
+        # The sum reproduces Eq. 12 exactly: combined slope = (sigma_s - P)/eps_FE.
         il_dv_electrostatic = (
             sigma_s / (fed.insulator_k * AtomicUnits.epsilon_0) * fed.insulator_thickness
             if fed.insulator_thickness != 0
             else 0.0
         )
-        fe_dv_electrostatic = (
-            (sigma_s - fe_polarization) / (fed.fe_k * AtomicUnits.epsilon_0) * fed.fe_thickness
+        fe_dv_electrostatic_applied = (
+            sigma_s / (fed.fe_k * AtomicUnits.epsilon_0) * fed.fe_thickness
             if fed.fe_thickness != 0
             else 0.0
         )
+        fe_dv_polarization = (
+            -fe_polarization / (fed.fe_k * AtomicUnits.epsilon_0) * fed.fe_thickness
+            if fed.fe_thickness != 0
+            else 0.0
+        )
+        # Backwards-compatible composite (used by callers that want the total drop).
+        fe_dv_electrostatic = fe_dv_electrostatic_applied + fe_dv_polarization
         dl_dv_electrostatic = (
             (sigma_s - fed.dl_polarization) / (fed.dl_k * AtomicUnits.epsilon_0) * fed.dl_thickness
             if fed.dl_thickness != 0
@@ -116,6 +133,8 @@ class Potential:
             "sigma_s": sigma_s,
             "il_dv_electrostatic": il_dv_electrostatic,
             "fe_dv_electrostatic": fe_dv_electrostatic,
+            "fe_dv_electrostatic_applied": fe_dv_electrostatic_applied,
+            "fe_dv_polarization": fe_dv_polarization,
             "dl_dv_electrostatic": dl_dv_electrostatic,
             "v_top_interface": v_top_interface,
             "total_e_field_il": total_e_field_il,
@@ -128,6 +147,26 @@ class Potential:
 
     def screening_charge_from_polarization(self, fe_polarization, v_diff=None):
         return self._electrostatic_state(fe_polarization, v_diff=v_diff)["sigma_s"]
+
+    @staticmethod
+    def sigma_pol_top(fe_polarization):
+        """Bound surface charge density at the top FE face (FE/IL interface).
+
+        Per polarization_barrier_coupling.md Eq. 1: outward normal at the
+        top FE face is -z, so sigma_pol,top = P . (-z) = -P.
+        Sign convention: P > 0 means polarization along +z (Ti -> Al).
+        Units match `fe_polarization` (atomic units in this codebase).
+        """
+        return -fe_polarization
+
+    @staticmethod
+    def sigma_pol_bot(fe_polarization):
+        """Bound surface charge density at the bottom FE face (FE/Al interface).
+
+        Per polarization_barrier_coupling.md Eq. 2: outward normal at the
+        bottom FE face is +z, so sigma_pol,bot = P . (+z) = +P.
+        """
+        return +fe_polarization
 
     def layer_fields_from_polarization(self, fe_polarization, v_diff=None):
         return self._electrostatic_state(fe_polarization, v_diff=v_diff)
@@ -157,10 +196,24 @@ class Potential:
         return top_screen_end, il_end, fe_end, dl_end, bottom_screen_end
 
     def electrostatic_potential(self, x, fe_polarization=None, v_diff=None):
+        # Applied-field-driven contribution to the local potential. Inside the
+        # FE region this uses only the `sigma_s / (eps_FE eps0)` slope (the
+        # P -> 0 limit of Eq. 12, i.e. Eq. 14). The polarization-only tilt
+        # ΔU_pol(x) = -(P/(eps_FE eps0)) q x (Eq. 8) is carried separately by
+        # `polarization_tilt_potential`. Sum reproduces Eq. 12 exactly.
         fed = self.fed
         polarization = fed.get_polarization() if fe_polarization is None else fe_polarization
         state = self._electrostatic_state(polarization, v_diff=v_diff)
         top_screen_end, il_end, fe_end, dl_end, bottom_screen_end = self._boundaries()
+        # Bottom-screen region must absorb the full V_app drop, but with the
+        # FE polarization contribution split out we accumulate the applied-
+        # field-only voltage drops up to the bottom electrode.
+        v_through_dl_applied = (
+            state["v_top_interface"]
+            + state["il_dv_electrostatic"]
+            + state["fe_dv_electrostatic_applied"]
+            + state["dl_dv_electrostatic"]
+        )
 
         if x <= 0:
             return 0.0
@@ -185,29 +238,66 @@ class Potential:
             return (
                 state["v_top_interface"]
                 + state["il_dv_electrostatic"]
-                + pos / fed.fe_thickness * state["fe_dv_electrostatic"]
+                + pos / fed.fe_thickness * state["fe_dv_electrostatic_applied"]
             )
         if x <= dl_end:
             if fed.dl_thickness == 0:
-                return state["v_top_interface"] + state["il_dv_electrostatic"] + state["fe_dv_electrostatic"]
+                return (
+                    state["v_top_interface"]
+                    + state["il_dv_electrostatic"]
+                    + state["fe_dv_electrostatic_applied"]
+                )
             pos = x - fe_end
             return (
                 state["v_top_interface"]
                 + state["il_dv_electrostatic"]
-                + state["fe_dv_electrostatic"]
+                + state["fe_dv_electrostatic_applied"]
                 + pos / fed.dl_thickness * state["dl_dv_electrostatic"]
             )
         if x <= bottom_screen_end:
+            # The total potential at the bottom electrode equals v_diff (=V_app),
+            # which means the applied-only sum + bottom-screen drop must reach
+            # v_diff *minus* the polarization tilt that we routed into
+            # polarization_tilt_potential. Equivalently, we exit the FE/DL
+            # stack at v_through_dl_applied and let the screening tail close.
             if fed.bottom_screening_len == 0:
-                return state["v_diff"]
+                return v_through_dl_applied
             return (
                 -state["sigma_s"]
                 * fed.bottom_screening_len
                 * np.exp(-abs(x - dl_end) / fed.bottom_screening_len)
                 / (AtomicUnits.epsilon_0 * fed.bottom_k)
-                + state["v_diff"]
+                + v_through_dl_applied
             )
-        return state["v_diff"]
+        return v_through_dl_applied
+
+    def polarization_tilt_potential(self, x, fe_polarization=None, v_diff=None):
+        """Polarization-only tilt across the FE per Eq. 8 of the contract.
+
+        Returns the (atomic-units) contribution to electron PE inside FE:
+          ΔU_pol(x_local) = -(sigma_pol_bot / eps_FE) q x_local
+                          = -(P / (eps_FE eps0)) q x_local
+        with x_local measured from the top FE face. Outside FE this is
+        constant (carries the cumulative tilt forward so total potential
+        across the stack remains continuous and Eq. 12 is reproduced when
+        summed with electrostatic_potential).
+        """
+        fed = self.fed
+        polarization = fed.get_polarization() if fe_polarization is None else fe_polarization
+        state = self._electrostatic_state(polarization, v_diff=v_diff)
+        top_screen_end, il_end, fe_end, dl_end, bottom_screen_end = self._boundaries()
+        fe_dv_polarization = state["fe_dv_polarization"]
+
+        # No tilt before the FE region.
+        if x <= il_end:
+            return 0.0
+        if x <= fe_end:
+            if fed.fe_thickness == 0:
+                return 0.0
+            pos = x - il_end
+            return pos / fed.fe_thickness * fe_dv_polarization
+        # Past the FE: carry the full cumulative tilt (constant).
+        return fe_dv_polarization
 
     def barrier_potential(self, x):
         fed = self.fed
@@ -248,8 +338,15 @@ class Potential:
         return 0.0
 
     def total_potential(self, x, fe_polarization=None, v_diff=None):
+        # Eq. 9 of polarization_barrier_coupling.md:
+        #   U_FE(x) = U_FE^(0) - q E_FE_applied x + ΔU_pol(x)
+        # The first term is `electrostatic_potential` (P -> 0 divider, Eq. 14).
+        # ΔU_pol(x) is `polarization_tilt_potential` (Eq. 8). Their sum
+        # reproduces Eq. 12 exactly while keeping the polarization tilt
+        # explicit and composable.
         return (
             self.electrostatic_potential(x, fe_polarization=fe_polarization, v_diff=v_diff)
+            + self.polarization_tilt_potential(x, fe_polarization=fe_polarization, v_diff=v_diff)
             + self.barrier_potential(x)
             + self.wf_potential(x)
         )

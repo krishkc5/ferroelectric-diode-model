@@ -26,6 +26,18 @@ class FerroelectricDiode:
         self.dl_k = ferroelectric.k / 2
         self.top_k = top_electrode.k
         self.bottom_k = bottom_electrode.k
+        # Optical (high-frequency) permittivities used for image-force lowering
+        # (polarization_barrier_coupling.md Eq. 15) and Tsymbal-Kohlstedt metal
+        # screening (Eq. 5/6). Metal eps_inf falls back to the lattice k field
+        # (k=1 by default for free-electron metals - Drude tail; see audit row 24).
+        self.insulator_eps_inf = (
+            insulator.eps_inf if insulator.eps_inf is not None else insulator.k
+        )
+        self.fe_eps_inf = (
+            ferroelectric.eps_inf if ferroelectric.eps_inf is not None else ferroelectric.k
+        )
+        self.top_eps_inf = getattr(top_electrode, "eps_inf", None) or top_electrode.k
+        self.bottom_eps_inf = getattr(bottom_electrode, "eps_inf", None) or bottom_electrode.k
         self.insulator_chi = insulator.chi
         self.fe_chi = ferroelectric.chi
         self.top_work_fxn = top_electrode.w_f
@@ -39,6 +51,12 @@ class FerroelectricDiode:
         self.top_m_eff = top_electrode.m_eff
         self.bottom_m_eff = bottom_electrode.m_eff
         self.fe_trap_depth = ferroelectric.trap_depth
+        # HfO_x / Al2O3 deep-trap depth for PF in IL region. Falls back to
+        # ferroelectric.trap_depth only if the insulator class lacks the field
+        # (parameter_audit_20260506.md punch #4, #8).
+        self.insulator_trap_depth = (
+            insulator.trap_depth if insulator.trap_depth is not None else ferroelectric.trap_depth
+        )
         self.name = (
             f"{top_electrode.name}-{insulator.name}-{ferroelectric.name}-{bottom_electrode.name}"
         )

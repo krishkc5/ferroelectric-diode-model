@@ -21,6 +21,21 @@ class TransportModelParameters:
     thermionic_bottom_barrier_floor_ev: float = 0.0
     thermionic_top_schottky_scale: float = 1.0
     thermionic_bottom_schottky_scale: float = 1.0
+    # Eq. 4' (polarization_barrier_coupling.md §3.1): Fermi-level pinning floor for
+    # the saturating-screening correction. ΔV_screen = ΔV_pin · tanh(ΔV_lin / ΔV_pin).
+    # Default 1.0 V matches the canonical metal/nitride pinning range (Casamento APL
+    # 120, 152901 (2022); Tsymbal-Kohlstedt 2006 review §III).
+    fermi_level_pinning_top_v: float = 1.0
+    fermi_level_pinning_bot_v: float = 1.0
+    # Tung barrier-inhomogeneity sigma [eV] for thermionic emission.
+    # A Gaussian distribution of barrier heights N(phi_bar, sigma^2) gives an
+    # effective TE rate J = J_homog * exp(sigma^2 / (2 (kT)^2)). Real metal/oxide
+    # interfaces have sigma_phi ~ 0.05-0.3 eV due to interface roughness, grain
+    # variation, and dipole inhomogeneity. Default 0.0 = off (recover homogeneous
+    # TE). Tung, Phys. Rev. B 45, 13509 (1992); Werner-Guettler, J. Appl. Phys.
+    # 69, 1522 (1991).
+    te_barrier_sigma_top_ev: float = 0.0
+    te_barrier_sigma_bot_ev: float = 0.0
     tunneling_prefactor_scale: float = 1.0
     poole_frenkel_mobility_m2_per_v_s: float = 1.0e-10
     poole_frenkel_trap_density_m3: float = 5.0e23
@@ -65,12 +80,71 @@ class TransportEvaluator:
         return AtomicUnits.atomic_units_to_Mv_per_cm(field_au) * 1e8
 
     def _schottky_lowering_ev(self, field_v_per_m, epsilon_r):
+        """Image-force (Schottky) barrier lowering. Eq. 15 of
+        polarization_barrier_coupling.md: Delta_phi_IF = sqrt(q E / (4 pi eps0 kappa_inf)).
+
+        Caller must pass kappa_infinity (optical permittivity), not kappa_static -
+        the carrier-induced image charge follows electronic-only dielectric
+        response (Mehta-Silverman-Jacobs 1973; Sze & Ng Ch. 3 sec 3.2.4).
+        """
         if field_v_per_m <= 0 or epsilon_r <= 0:
             return 0.0
         lowering_volts = np.sqrt(
             constants.e * field_v_per_m / (4 * np.pi * constants.epsilon_0 * epsilon_r)
         )
         return float(lowering_volts)
+
+    def _poole_frenkel_lowering_ev(self, field_v_per_m, epsilon_r):
+        """Poole-Frenkel barrier lowering. polarization_barrier_coupling.md sec 7
+        (PF row): Delta_phi_PF = sqrt(q^3 E_FE / (pi eps0 kappa_inf,FE)).
+
+        Two differences from the Schottky form:
+          (a) leading factor is pi, not 4 pi (Sze & Ng Ch. 3 Eq. 137);
+          (b) kappa is the optical permittivity of the bulk dielectric
+              (Mehta-Silverman-Jacobs 1973).
+        Magnitude only - the carrier always sees a lower barrier on the
+        side it is moving toward; sign-of-current is carried separately.
+        """
+        if field_v_per_m <= 0 or epsilon_r <= 0:
+            return 0.0
+        lowering_volts = np.sqrt(
+            constants.e * field_v_per_m / (np.pi * constants.epsilon_0 * epsilon_r)
+        )
+        return float(lowering_volts)
+
+    def _polarization_dipole_shift_ev(self, sigma_pol_au, lambda_tf_au, kappa_inf_metal, delta_v_pin_v):
+        """Tsymbal-Kohlstedt screening shift of the electron Schottky barrier,
+        with Fermi-level-pinning saturation (polarization_barrier_coupling.md Eq. 4').
+
+        Linear T-K shift (Eq. 4):
+            Delta_V_lin = - sigma_pol * lambda_TF / (eps0 * kappa_inf,metal)    [V]
+
+        Saturating form (Eq. 4'), needed at AlScN-scale polarization where the linear
+        formula leaves its domain of validity (BTO/BFO: ~1-3 V, fine; AlScN: ~5+ V,
+        unphysical — see §3.1 of the contract):
+            Delta_V_screen = Delta_V_pin * tanh(Delta_V_lin / Delta_V_pin)      [V]
+
+        Limits: Delta_V_screen -> Delta_V_lin for |Delta_V_lin| << Delta_V_pin
+        (BTO/BFO regime); Delta_V_screen -> ±Delta_V_pin for |Delta_V_lin| >>
+        Delta_V_pin (AlScN regime, Fermi-level pinned).
+
+        Per Eq. 5/6 the leading minus is uniform; asymmetry between top/bot interfaces
+        comes from sigma_pol,top = -P, sigma_pol,bot = +P (Eq. 1, 2). Numerically
+        Delta_phi_B [eV] = Delta_V_screen [V].
+
+        Inputs in atomic units (sigma in atomic charge density, lambda in Bohr).
+        kappa_inf_metal is the metal's *optical* permittivity ~1 (Drude tail).
+        delta_v_pin_v is the Fermi-level pinning floor [V]; ~1.0 V for nitride/metal.
+        """
+        if kappa_inf_metal <= 0 or delta_v_pin_v <= 0:
+            return 0.0
+        sigma_si = AtomicUnits.convert_back_polarization(sigma_pol_au) / 1e2  # C/m^2
+        lambda_si = AtomicUnits.bohr_to_m(lambda_tf_au)
+        # Eq. 4 (linear): leading minus per Eq. 5/6 sign convention.
+        delta_v_lin_v = -sigma_si * lambda_si / (constants.epsilon_0 * kappa_inf_metal)
+        # Eq. 4' (saturating): tanh-cap at the pinning floor. Preserves sign of delta_v_lin.
+        delta_v_screen_v = delta_v_pin_v * float(np.tanh(delta_v_lin_v / delta_v_pin_v))
+        return delta_v_screen_v
 
     def _bias_drive(self, voltage_v):
         v_t = max(self._thermal_voltage, 1e-6)
@@ -94,6 +168,8 @@ class TransportEvaluator:
         return 0.25 * constants.e * density_m3 * fermi_velocity
 
     def _barriers_ev(self, state: BiasPointState):
+        # Image-force lowering uses |E| of the injection-side dielectric
+        # (Eq. 15: Delta_phi_IF magnitude is sign-independent of E).
         top_field_v_per_m = abs(
             self._field_to_v_per_m(state.il_field_au if self.diode.insulator_thickness != 0 else state.fe_field_au)
         )
@@ -101,19 +177,41 @@ class TransportEvaluator:
         top_affinity = self.diode.insulator_chi if self.diode.insulator_thickness != 0 else self.diode.fe_chi
         top_base_barrier = AtomicUnits.hartree_to_ev(self.diode.top_work_fxn - top_affinity)
         bottom_base_barrier = AtomicUnits.hartree_to_ev(self.diode.bottom_work_fxn - self.diode.fe_chi)
+        # Tsymbal-Kohlstedt polarization dipole shift (Eq. 5, Eq. 6). The
+        # leading minus is uniform; asymmetry comes from sigma_pol,top = -P
+        # (Eq. 1) vs sigma_pol,bot = +P (Eq. 2). Use the *metal*'s optical
+        # permittivity for the screening dielectric (electronic-only response,
+        # Mehta-Silverman-Jacobs 1973). For Ti/Al, kappa_inf,metal ~ 1 unless
+        # materials.py supplies a better Drude-tail value.
+        delta_phi_top_ev = self._polarization_dipole_shift_ev(
+            state.sigma_pol_top_au,
+            self.diode.top_screening_len,
+            self.diode.top_eps_inf,
+            self.parameters.fermi_level_pinning_top_v,
+        )
+        delta_phi_bot_ev = self._polarization_dipole_shift_ev(
+            state.sigma_pol_bot_au,
+            self.diode.bottom_screening_len,
+            self.diode.bottom_eps_inf,
+            self.parameters.fermi_level_pinning_bot_v,
+        )
+        # Image-force kappa is kappa_inf of the *injection-side dielectric*
+        # (Eq. 15): top inj. = IL (HfO_x); bottom inj. = FE (AlScN).
+        top_image_kappa = (
+            self.diode.insulator_eps_inf if self.diode.insulator_thickness != 0 else self.diode.fe_eps_inf
+        )
         top_barrier = max(
             top_base_barrier
+            + delta_phi_top_ev
             - self.parameters.thermionic_top_schottky_scale
-            * self._schottky_lowering_ev(
-                top_field_v_per_m,
-                self.diode.insulator_k if self.diode.insulator_thickness != 0 else self.diode.fe_k,
-            ),
+            * self._schottky_lowering_ev(top_field_v_per_m, top_image_kappa),
             0.0,
         )
         bottom_barrier = max(
             bottom_base_barrier
+            + delta_phi_bot_ev
             - self.parameters.thermionic_bottom_schottky_scale
-            * self._schottky_lowering_ev(bottom_field_v_per_m, self.diode.fe_k),
+            * self._schottky_lowering_ev(bottom_field_v_per_m, self.diode.fe_eps_inf),
             0.0,
         )
         return top_barrier, bottom_barrier
@@ -151,8 +249,20 @@ class TransportEvaluator:
             * self.diode.bottom_m_eff
             * temperature**2
         )
-        top_injection = top_prefactor * np.exp(-top_barrier_ev / max(k_t_ev, 1e-9))
-        bottom_injection = bottom_prefactor * np.exp(-bottom_barrier_ev / max(k_t_ev, 1e-9))
+        # Tung barrier-inhomogeneity enhancement (Tung 1992 PRB 45, 13509). A Gaussian
+        # distribution of barrier heights N(phi_bar, sigma^2) over the device area
+        # raises the integrated TE current by exp(sigma^2 / (2 (kT)^2)), which can be
+        # many orders of magnitude. We cap the exponent at 80 (~exp(80) ~ 5.5e34)
+        # to avoid floating-point overflow in unphysical fit excursions; sigma_phi
+        # values larger than ~kT*sqrt(160) ~ 0.32 eV at 300K should be treated with
+        # suspicion since they correspond to the high-end of the literature range.
+        sigma_top_ev = max(self.parameters.te_barrier_sigma_top_ev, 0.0)
+        sigma_bot_ev = max(self.parameters.te_barrier_sigma_bot_ev, 0.0)
+        kt_safe = max(k_t_ev, 1e-9)
+        top_inhom_log = min(0.5 * (sigma_top_ev / kt_safe) ** 2, 80.0)
+        bot_inhom_log = min(0.5 * (sigma_bot_ev / kt_safe) ** 2, 80.0)
+        top_injection = top_prefactor * np.exp(-top_barrier_ev / kt_safe + top_inhom_log)
+        bottom_injection = bottom_prefactor * np.exp(-bottom_barrier_ev / kt_safe + bot_inhom_log)
         voltage_sign = self._voltage_sign(state.voltage_v)
         if voltage_sign > 0:
             current = top_injection
@@ -201,7 +311,11 @@ class TransportEvaluator:
         flux_bottom = self._carrier_flux(
             self.diode.bottom_n0, self.diode.bottom_fermi_e, self.diode.bottom_m_eff
         )
-        bias_drive = self._voltage_sign(state.voltage_v)
+        # Direction follows the (signed) field across the FE: P-driven
+        # depolarizing field at V_app = 0 produces nonzero tunneling current
+        # of the correct sign (polarization_barrier_coupling.md Eq. 12).
+        # When E_FE -> 0 we fall back to V_app to break degeneracy.
+        bias_drive = self._field_sign(state.fe_field_au, fallback_voltage_v=state.voltage_v)
         current = (
             self.parameters.tunneling_prefactor_scale
             * 0.5
@@ -212,34 +326,46 @@ class TransportEvaluator:
         return float(current), transmission
 
     def _poole_frenkel_component(self, state: BiasPointState, region: str):
+        # PF lives inside the bulk dielectric. polarization_barrier_coupling.md
+        # sec 7 (PF row): Delta_phi_PF = sqrt(q^3 E / (pi eps0 kappa_inf)).
+        # Note: pi (not 4 pi) in the denominator and kappa_inf (not kappa_static).
+        # Trap depth: insulator-side PF must use insulator.trap_depth (HfO_x ~ 1.0 eV
+        # / Al2O3 ~ 1.4 eV), not AlScN's fe_trap_depth (parameter audit punch #4, #8).
         if region == "il":
             field_au = state.il_field_au
-            epsilon_r = self.diode.insulator_k
+            kappa_inf = self.diode.insulator_eps_inf
             region_scale = self.parameters.poole_frenkel_il_prefactor_scale
+            default_trap_depth_au = self.diode.insulator_trap_depth
         else:
             field_au = state.fe_field_au
-            epsilon_r = self.diode.fe_k
+            kappa_inf = self.diode.fe_eps_inf
             region_scale = self.parameters.poole_frenkel_fe_prefactor_scale
-        field_v_per_m = abs(self._field_to_v_per_m(field_au))
+            default_trap_depth_au = self.diode.fe_trap_depth
+        # Carry the *signed* E_FE through the math: even at V_app = 0 with P != 0
+        # there is a depolarizing field E_FE != 0 (Eq. 12) and PF must produce
+        # nonzero current. Magnitude only enters the Frenkel sqrt.
+        field_signed_v_per_m = self._field_to_v_per_m(field_au)
+        field_v_per_m = abs(field_signed_v_per_m)
         trap_depth_ev = (
             self.parameters.poole_frenkel_trap_depth_ev
             if self.parameters.poole_frenkel_trap_depth_ev is not None
-            else AtomicUnits.hartree_to_ev(self.diode.fe_trap_depth)
+            else AtomicUnits.hartree_to_ev(default_trap_depth_au)
         )
-        lowering_ev = self._schottky_lowering_ev(field_v_per_m, epsilon_r)
+        lowering_ev = self._poole_frenkel_lowering_ev(field_v_per_m, kappa_inf)
         activation_ev = max(trap_depth_ev - lowering_ev, 0.0)
         thermal_ev = constants.k * self.parameters.temperature_k / constants.e
+        # J = q n mu E (drift) with field-dependent mobility e^{-phi_eff/kT}.
+        # E carries its own sign (Eq. 12), so the current sign tracks E - not V_app.
         current = (
             self.parameters.poole_frenkel_prefactor_scale
             * region_scale
             * constants.e
             * self.parameters.poole_frenkel_trap_density_m3
             * self.parameters.poole_frenkel_mobility_m2_per_v_s
-            * field_v_per_m
+            * field_signed_v_per_m
             * np.exp(-activation_ev / max(thermal_ev, 1e-9))
-            * self._voltage_sign(state.voltage_v)
         )
-        return float(current), field_au, field_v_per_m, epsilon_r, lowering_ev, activation_ev
+        return float(current), field_au, field_v_per_m, kappa_inf, lowering_ev, activation_ev
 
     def _poole_frenkel_current(self, state: BiasPointState):
         if not self.enable_poole_frenkel:
@@ -265,16 +391,25 @@ class TransportEvaluator:
             barrier_ev=reduced_barrier_ev,
             effective_mass=profile["effective_mass"],
         )
-        field_enhancement = 1.0 + abs(self._field_to_v_per_m(state.fe_field_au)) / 1e8
+        # Field enhancement uses |E| (Schottky-like sqrt scaling); but the
+        # current direction is set by the sign of E_FE, not V_app, so that
+        # depolarizing-field-driven leakage at V_app = 0 (P != 0) is non-zero.
+        field_signed_v_per_m = self._field_to_v_per_m(state.fe_field_au)
+        field_enhancement = 1.0 + abs(field_signed_v_per_m) / 1e8
+        direction = self._field_sign(state.fe_field_au, fallback_voltage_v=state.voltage_v)
         current = self.parameters.trap_assisted_prefactor_a_per_m2 * transmission * field_enhancement
-        return float(current * self._voltage_sign(state.voltage_v)), transmission
+        return float(current * direction), transmission
 
     def _sclc_current(self, state: BiasPointState):
         if not self.enable_sclc or self.diode.fe_thickness == 0:
             return 0.0
 
         thickness_m = AtomicUnits.bohr_to_m(self.diode.fe_thickness)
+        # Mott-Gurney scales with V^2 (magnitude); current direction tracks the
+        # sign of E_FE rather than V_app, so depolarizing-field leakage at zero
+        # bias produces nonzero SCLC of the correct sign (Eq. 12).
         voltage_drop_v = abs(AtomicUnits.convert_back_volts(state.fe_field_au * self.diode.fe_thickness))
+        direction = self._field_sign(state.fe_field_au, fallback_voltage_v=state.voltage_v)
         current = (
             self.parameters.sclc_prefactor_scale
             * 9.0
@@ -285,7 +420,7 @@ class TransportEvaluator:
             * voltage_drop_v**2
             / max(thickness_m**3, 1e-30)
         )
-        return float(np.sign(state.voltage_v) * current)
+        return float(direction * current)
 
     def _background_leakage_current(self, state: BiasPointState):
         conductance = self.parameters.background_conductance_a_per_m2_v
@@ -352,17 +487,35 @@ class TransportEvaluator:
 
         top_base_barrier_ev = top_work_function_ev - top_affinity_ev
         bottom_base_barrier_ev = bottom_work_function_ev - fe_affinity_ev
-        top_schottky_lowering_ev = self._schottky_lowering_ev(
-            top_field_v_per_m,
-            self.diode.insulator_k if self.diode.insulator_thickness != 0 else self.diode.fe_k,
+        # Image-force: kappa_inf of the injection-side dielectric (Eq. 15).
+        top_image_kappa = (
+            self.diode.insulator_eps_inf if self.diode.insulator_thickness != 0 else self.diode.fe_eps_inf
         )
-        bottom_schottky_lowering_ev = self._schottky_lowering_ev(bottom_field_v_per_m, self.diode.fe_k)
+        top_schottky_lowering_ev = self._schottky_lowering_ev(top_field_v_per_m, top_image_kappa)
+        bottom_schottky_lowering_ev = self._schottky_lowering_ev(bottom_field_v_per_m, self.diode.fe_eps_inf)
         top_schottky_effective_ev = self.parameters.thermionic_top_schottky_scale * top_schottky_lowering_ev
         bottom_schottky_effective_ev = (
             self.parameters.thermionic_bottom_schottky_scale * bottom_schottky_lowering_ev
         )
-        top_barrier_ev = max(top_base_barrier_ev - top_schottky_effective_ev, 0.0)
-        bottom_barrier_ev = max(bottom_base_barrier_ev - bottom_schottky_effective_ev, 0.0)
+        # Tsymbal-Kohlstedt polarization dipole shift (Eq. 5, Eq. 6) with Eq. 4' saturation.
+        delta_phi_top_ev = self._polarization_dipole_shift_ev(
+            state.sigma_pol_top_au,
+            self.diode.top_screening_len,
+            self.diode.top_eps_inf,
+            self.parameters.fermi_level_pinning_top_v,
+        )
+        delta_phi_bot_ev = self._polarization_dipole_shift_ev(
+            state.sigma_pol_bot_au,
+            self.diode.bottom_screening_len,
+            self.diode.bottom_eps_inf,
+            self.parameters.fermi_level_pinning_bot_v,
+        )
+        top_barrier_ev = max(
+            top_base_barrier_ev + delta_phi_top_ev - top_schottky_effective_ev, 0.0
+        )
+        bottom_barrier_ev = max(
+            bottom_base_barrier_ev + delta_phi_bot_ev - bottom_schottky_effective_ev, 0.0
+        )
         top_offset_ev = (
             self.parameters.thermionic_barrier_offset_ev + self.parameters.thermionic_top_barrier_offset_ev
         )
@@ -413,12 +566,13 @@ class TransportEvaluator:
         flux_bottom_a_per_m2 = self._carrier_flux(
             self.diode.bottom_n0, self.diode.bottom_fermi_e, self.diode.bottom_m_eff
         )
+        # DT direction tracks signed E_FE (Eq. 12), not V_app (audit punch).
         tunneling_raw_a_per_m2 = (
             self.parameters.tunneling_prefactor_scale
             * 0.5
             * (flux_top_a_per_m2 + flux_bottom_a_per_m2)
             * tunneling_transmission
-            * voltage_sign
+            * field_sign
         )
         tunneling_a_per_m2 = tunneling_raw_a_per_m2 if self.enable_tunneling else 0.0
 
@@ -470,11 +624,12 @@ class TransportEvaluator:
             effective_mass=profile["effective_mass"],
         )
         field_enhancement = 1.0 + pf_field_v_per_m / 1e8
+        # TAT direction tracks signed E_FE (Eq. 12), not V_app.
         trap_assisted_tunneling_raw_a_per_m2 = (
             self.parameters.trap_assisted_prefactor_a_per_m2
             * trap_tunneling_transmission
             * field_enhancement
-            * self._voltage_sign(state.voltage_v)
+            * field_sign
         )
         trap_assisted_tunneling_a_per_m2 = (
             trap_assisted_tunneling_raw_a_per_m2 if self.enable_trap_assisted_tunneling else 0.0
@@ -482,8 +637,9 @@ class TransportEvaluator:
 
         thickness_m = AtomicUnits.bohr_to_m(self.diode.fe_thickness)
         voltage_drop_v = abs(AtomicUnits.convert_back_volts(state.fe_field_au * self.diode.fe_thickness))
+        # SCLC direction tracks signed E_FE (Eq. 12), not V_app.
         sclc_raw_a_per_m2 = (
-            np.sign(state.voltage_v)
+            field_sign
             * self.parameters.sclc_prefactor_scale
             * 9.0
             / 8.0
